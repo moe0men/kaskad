@@ -12,16 +12,6 @@ NC='\033[0m'
 
 # --- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ---
 
-type_text() {
-    local text="$1"
-    local delay=0.03
-    for (( i=0; i<${#text}; i++ )); do
-        echo -n "${text:$i:1}"
-        sleep $delay
-    done
-    echo ""
-}
-
 check_root() {
     if [ "$EUID" -ne 0 ]; then
         echo -e "${RED}[ERROR] Запустите скрипт с правами root!${NC}"
@@ -61,48 +51,7 @@ prepare_system() {
     fi
 }
 
-# --- ПРОМО БЛОК ---
-show_promo() {
-    clear
-    echo ""
-    echo -e "${MAGENTA}╔══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${MAGENTA}║         ХОСТИНГ, КОТОРЫЙ РАБОТАЕТ СО СКИДКОЙ ДО -60%         ║${NC}"
-    echo -e "${MAGENTA}╚══════════════════════════════════════════════════════════════╝${NC}"
-    echo ""
-
-    echo -e "${CYAN}🌍 ЛОКАЦИИ: РФ И ЕВРОПА${NC}"
-    echo -e "${WHITE}  >>> https://vk.cc/ct29NQ${NC}"
-    printf "  ${YELLOW}%-12s${NC} : ${WHITE}%s${NC}\n" "OFF60" "60% скидка на первый месяц"
-    printf "  ${YELLOW}%-12s${NC} : ${WHITE}%s${NC}\n" "antenka20" "Буст 20% + 3% (при оплате за 3 мес)"
-    printf "  ${YELLOW}%-12s${NC} : ${WHITE}%s${NC}\n" "antenka6" "Буст 15% + 5% (при оплате за 6 мес)"
-    printf "  ${YELLOW}%-12s${NC} : ${WHITE}%s${NC}\n" "antenka12" "Буст 5% + 5% (при оплате за 12 мес)"
-
-    echo -e "\n${CYAN}🇧🇾 ЛОКАЦИЯ: БЕЛАРУСЬ${NC}"
-    echo -e "${WHITE}  >>> https://vk.cc/cUxAhj${NC}"
-    printf "  ${YELLOW}%-12s${NC} : ${WHITE}%s${NC}\n" "OFF60" "60% скидка на первый месяц"
-
-    echo ""
-    echo -e "\n${YELLOW}Генерация QR-кода основного партнера... (3 сек)${NC}"
-    for i in {3..1}; do
-        echo -ne "$i..."
-        sleep 1
-    done
-    echo ""
-
-    echo -e "\n${WHITE}" 
-    if command -v qrencode &> /dev/null; then
-        qrencode -t ANSIUTF8 "https://vk.cc/ct29NQ"
-    else
-        echo "QR-код не загрузился, используйте ссылки выше."
-    fi
-    echo -e "${NC}"
-    
-    echo -e "${GREEN}Сканируйте камерой телефона!${NC}"
-    echo ""
-    read -p "Нажмите enter для настройки каскадного скрипта..."
-}
-
-# --- ИНСТРУКЦИЯ (ТЕКСТ ВНУТРИ КОДА) ---
+# --- ИНСТРУКЦИЯ ---
 show_instructions() {
     clear
     echo -e "${MAGENTA}╔══════════════════════════════════════════════════════════════╗${NC}"
@@ -215,7 +164,7 @@ apply_iptables_rules() {
     # Новые правила
     iptables -A INPUT -p "$PROTO" --dport "$IN_PORT" -j ACCEPT
     iptables -t nat -A PREROUTING -p "$PROTO" --dport "$IN_PORT" -j DNAT --to-destination "$TARGET_IP:$OUT_PORT"
-    
+
     if ! iptables -t nat -C POSTROUTING -o "$IFACE" -j MASQUERADE 2>/dev/null; then
         iptables -t nat -A POSTROUTING -o "$IFACE" -j MASQUERADE
     fi
@@ -231,7 +180,7 @@ apply_iptables_rules() {
     fi
 
     netfilter-persistent save > /dev/null
-    
+
     echo -e "${GREEN}[SUCCESS] $NAME настроен!${NC}"
     echo -e "$PROTO: Вход $IN_PORT -> Выход $TARGET_IP:$OUT_PORT"
     read -p "Нажмите Enter для возврата в меню..."
@@ -248,15 +197,6 @@ list_active_rules() {
         if [[ -n "$l_port" ]]; then echo -e "$l_port\t\t$l_proto\t\t$l_dest"; fi
     done
     echo ""
-    
-    echo -e "${GREEN}💰 Задонатить каналу и автору:${NC}"
-    if command -v qrencode &> /dev/null; then
-        qrencode -t ANSIUTF8 "https://pay.cloudtips.ru/p/7410814f"
-    else
-        echo "https://pay.cloudtips.ru/p/7410814f"
-    fi
-    echo ""
-
     read -p "Нажмите Enter..."
 }
 
@@ -290,12 +230,12 @@ delete_single_rule() {
     IFS=':' read -r d_port d_proto d_dest <<< "${RULES_LIST[$rule_num]}"
     local target_ip="${d_dest%:*}"
     local target_port="${d_dest#*:}"
-    
+
     iptables -t nat -D PREROUTING -p "$d_proto" --dport "$d_port" -j DNAT --to-destination "$d_dest" 2>/dev/null
     iptables -D INPUT -p "$d_proto" --dport "$d_port" -j ACCEPT 2>/dev/null
     iptables -D FORWARD -p "$d_proto" -d "$target_ip" --dport "$target_port" -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT 2>/dev/null
     iptables -D FORWARD -p "$d_proto" -s "$target_ip" --sport "$target_port" -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null
-    
+
     netfilter-persistent save > /dev/null
     echo -e "${GREEN}[OK] Правило удалено.${NC}"
     read -p "Нажмите Enter..."
@@ -326,19 +266,10 @@ show_menu() {
         clear
         echo -e "${MAGENTA}"
         echo "******************************************************"
-        echo "       anten-ka канал представляет..."
-        echo "       YouTube: https://www.youtube.com/@antenkaru"
+        echo "       Настройка каскадной переадресации портов"
         echo "******************************************************"
         echo -e "${NC}"
-        
-        echo -e "${YELLOW}Получить инструкции:${NC}"
-        echo -e "1 способ: ${BLUE}https://boosty.to/anten-ka${NC}"
-        echo -e "2 способ: ${BLUE}https://antenka.taplink.ws${NC}"
-        echo -e "3 способ: ${BLUE}https://web.tribute.tg/p/cJu${NC}"
-        echo ""
-        echo -e "${GREEN}💰 Задонатить каналу и автору:${NC} https://pay.cloudtips.ru/p/7410814f"
-        echo -e "------------------------------------------------------"
-        
+
         echo -e "1) Настроить ${CYAN}AmneziaWG / WireGuard${NC} (UDP)"
         echo -e "2) Настроить ${CYAN}VLESS / XRay${NC} (TCP)"
         echo -e "3) Настроить ${CYAN}TProxy / MTProto${NC} (TCP)"
@@ -346,8 +277,7 @@ show_menu() {
         echo -e "5) Посмотреть активные правила"
         echo -e "6) ${RED}Удалить одно правило${NC}"
         echo -e "7) ${RED}Сбросить ВСЕ настройки${NC}"
-        echo -e "8) ${YELLOW}Показать PROMO${NC}"
-        echo -e "9) ${MAGENTA}📚 ИНСТРУКЦИЯ (Как настроить)${NC}" 
+        echo -e "8) ${MAGENTA}📚 ИНСТРУКЦИЯ (Как настроить)${NC}"
         echo -e "0) Выход"
         echo -e "------------------------------------------------------"
         read -p "Ваш выбор: " choice
@@ -360,8 +290,7 @@ show_menu() {
             5) list_active_rules ;;
             6) delete_single_rule ;;
             7) flush_rules ;;
-            8) show_promo ;;
-            9) show_instructions ;;
+            8) show_instructions ;;
             0) exit 0 ;;
             *) ;;
         esac
@@ -371,5 +300,4 @@ show_menu() {
 # --- ЗАПУСК ---
 check_root
 prepare_system
-show_promo
 show_menu
